@@ -1,4 +1,4 @@
-"""Tests for spoke_lint package-level public API (TICKET-004, TICKET-007, TICKET-010)."""
+"""Tests for spoke_lint package-level public API (TICKET-004, 007, 010, 014)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ def test_public_api_importable():
     from spoke_lint import (
         ArgSpec,
         Invocation,
+        canonical_names,
         extract_invocations,
         parse_spoke,
         parse_spoke_args,
@@ -17,6 +18,7 @@ def test_public_api_importable():
     assert callable(extract_invocations)
     assert callable(parse_spoke_args)
     assert callable(parse_spoke)
+    assert callable(canonical_names)
 
 
 def test_all_defined():
@@ -28,6 +30,7 @@ def test_all_defined():
         "extract_invocations",
         "parse_spoke_args",
         "parse_spoke",
+        "canonical_names",
     ]
 
 
@@ -36,6 +39,7 @@ def test_exports_are_the_same_objects():
     from spoke_lint.extractor import extract_invocations as _extract
     from spoke_lint.models import ArgSpec as _ArgSpec
     from spoke_lint.models import Invocation as _Invocation
+    from spoke_lint.parser import canonical_names as _canonical
     from spoke_lint.parser import parse_spoke as _parse_spoke
     from spoke_lint.parser import parse_spoke_args as _parse
 
@@ -44,3 +48,4 @@ def test_exports_are_the_same_objects():
     assert spoke_lint.extract_invocations is _extract
     assert spoke_lint.parse_spoke_args is _parse
     assert spoke_lint.parse_spoke is _parse_spoke
+    assert spoke_lint.canonical_names is _canonical

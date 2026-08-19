@@ -218,3 +218,185 @@ class TestParseSpokeDict:
         as_path = parse_spoke(FIXTURES / "short_flag.py")
         assert as_str == as_path
         assert set(as_str.keys()) == {"v"}
+
+
+class TestMultiOption:
+    def test_multi_option_emits_long_canonical_name(self):
+        result = parse_spoke_args(FIXTURES / "multi_option.py")
+        assert len(result) == 1
+        spec = result[0]
+        assert spec.name == "verbose"
+        assert spec.required is False
+        assert spec.default is None
+
+    def test_multi_option_long_name_not_short(self):
+        result = parse_spoke_args(FIXTURES / "multi_option.py")
+        assert result[0].name != "v"
+
+    def test_only_short_options_keep_strip_dashes(self):
+        # Only short options present: first short option wins, dashes stripped.
+        import textwrap
+
+        src = textwrap.dedent(
+            """
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument("-a", "-b", help="two shorts")
+            """
+        )
+        p = FIXTURES / "_tmp_two_shorts.py"
+        p.write_text(src, encoding="utf-8")
+        try:
+            result = parse_spoke_args(p)
+            assert result == [ArgSpec(name="a", required=False, default=None)]
+        finally:
+            p.unlink()
+
+    def test_long_option_preferred_over_short(self):
+        import textwrap
+
+        src = textwrap.dedent(
+            """
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument("-x", "--extra", required=True)
+            """
+        )
+        p = FIXTURES / "_tmp_long_pref.py"
+        p.write_text(src, encoding="utf-8")
+        try:
+            result = parse_spoke_args(p)
+            assert result == [ArgSpec(name="extra", required=True, default=None)]
+        finally:
+            p.unlink()
+
+
+class TestNargs:
+    def test_positional_nargs_plus_required(self):
+        result = parse_spoke_args(FIXTURES / "nargs_spoke.py")
+        by_name = {s.name: s for s in result}
+        assert by_name["inputs"].required is True
+        assert by_name["inputs"].default is None
+
+    def test_positional_nargs_question_not_required(self):
+        result = parse_spoke_args(FIXTURES / "nargs_spoke.py")
+        by_name = {s.name: s for s in result}
+        assert by_name["config"].required is False
+        assert by_name["config"].default is None
+
+    def test_dashed_flag_nargs_star_not_required(self):
+        result = parse_spoke_args(FIXTURES / "nargs_spoke.py")
+        by_name = {s.name: s for s in result}
+        assert by_name["tags"].required is False
+        assert by_name["tags"].default is None
+
+    def test_positional_nargs_int_required(self):
+        import textwrap
+
+        src = textwrap.dedent(
+            """
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument("pair", nargs=2)
+            """
+        )
+        p = FIXTURES / "_tmp_nargs_int.py"
+        p.write_text(src, encoding="utf-8")
+        try:
+            result = parse_spoke_args(p)
+            assert result == [ArgSpec(name="pair", required=True, default=None)]
+        finally:
+            p.unlink()
+
+    def test_dashed_flag_nargs_plus_keeps_required_handling(self):
+        # A dashed flag with nargs="+" keeps existing required/default handling.
+        import textwrap
+
+        src = textwrap.dedent(
+            """
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--files", nargs="+", required=True)
+            """
+        )
+        p = FIXTURES / "_tmp_flag_nargs_plus.py"
+        p.write_text(src, encoding="utf-8")
+        try:
+            result = parse_spoke_args(p)
+            assert result == [ArgSpec(name="files", required=True, default=None)]
+        finally:
+            p.unlink()
+
+    def test_dashed_flag_nargs_star_with_default(self):
+        import textwrap
+
+        src = textwrap.dedent(
+            """
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--opts", nargs="*", default="none")
+            """
+        )
+        p = FIXTURES / "_tmp_flag_nargs_star_default.py"
+        p.write_text(src, encoding="utf-8")
+        try:
+            result = parse_spoke_args(p)
+            assert result == [ArgSpec(name="opts", required=False, default="none")]
+        finally:
+            p.unlink()
+
+
+class TestSubparsers:
+    def test_subparser_args_collected(self):
+        result = parse_spoke_args(FIXTURES / "subparser_spoke.py")
+        by_name = {s.name: s for s in result}
+        assert set(by_name.keys()) == {"epochs", "metric"}
+
+    def test_subparser_arg_names_prefix_free(self):
+        result = parse_spoke_args(FIXTURES / "subparser_spoke.py")
+        by_name = {s.name: s for s in result}
+        assert by_name["epochs"].required is False
+        assert by_name["epochs"].default == "10"
+        assert by_name["metric"].required is True
+        assert by_name["metric"].default is None
+
+    def test_subparser_args_interleaved_by_line(self):
+        # Sub-parser args appear in source order relative to top-level args.
+        import textwrap
+
+        src = textwrap.dedent(
+            """
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--top", required=True)
+            sub = parser.add_subparsers()
+            cmd = sub.add_parser("go")
+            cmd.add_argument("--flag", default="x")
+            """
+        )
+        p = FIXTURES / "_tmp_sub_interleave.py"
+        p.write_text(src, encoding="utf-8")
+        try:
+            result = parse_spoke_args(p)
+            assert [s.name for s in result] == ["top", "flag"]
+        finally:
+            p.unlink()
+
+
+class TestCanonicalNames:
+    def test_returns_set_of_names(self):
+        from spoke_lint.parser import canonical_names
+
+        specs = [ArgSpec(name="a"), ArgSpec(name="b")]
+        assert canonical_names(specs) == {"a", "b"}
+
+    def test_empty_list_empty_set(self):
+        from spoke_lint.parser import canonical_names
+
+        assert canonical_names([]) == set()
+
+    def test_deduplicates_names(self):
+        from spoke_lint.parser import canonical_names
+
+        specs = [ArgSpec(name="a"), ArgSpec(name="a"), ArgSpec(name="b")]
+        assert canonical_names(specs) == {"a", "b"}
