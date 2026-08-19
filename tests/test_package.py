@@ -15,6 +15,7 @@ def test_public_api_importable():
         diff_prompt,
         diff_prompt_full,
         extract_invocations,
+        findings_to_json,
         format_finding,
         gate_commands,
         parse_spoke,
@@ -35,6 +36,7 @@ def test_public_api_importable():
     assert callable(diff_prompt_full)
     assert callable(gate_commands)
     assert callable(diff_gate_commands)
+    assert callable(findings_to_json)
     assert callable(format_finding)
     assert callable(render_report)
     assert callable(build_parser)
@@ -57,6 +59,7 @@ def test_all_defined():
         "diff_prompt_full",
         "gate_commands",
         "diff_gate_commands",
+        "findings_to_json",
         "format_finding",
         "render_report",
         "build_parser",
@@ -80,6 +83,7 @@ def test_exports_are_the_same_objects():
     from spoke_lint.parser import canonical_names as _canonical
     from spoke_lint.parser import parse_spoke as _parse_spoke
     from spoke_lint.parser import parse_spoke_args as _parse
+    from spoke_lint.report import findings_to_json as _findings_to_json
     from spoke_lint.report import format_finding as _format_finding
     from spoke_lint.report import render_report as _render_report
 
@@ -95,6 +99,7 @@ def test_exports_are_the_same_objects():
     assert spoke_lint.diff_prompt_full is _diff_prompt_full
     assert spoke_lint.gate_commands is _gate
     assert spoke_lint.diff_gate_commands is _diff_gate
+    assert spoke_lint.findings_to_json is _findings_to_json
     assert spoke_lint.format_finding is _format_finding
     assert spoke_lint.render_report is _render_report
     assert spoke_lint.build_parser is _build_parser

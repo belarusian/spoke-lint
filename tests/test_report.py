@@ -6,10 +6,17 @@ constructed directly so the assertions are byte-stable.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from spoke_lint.models import Finding
-from spoke_lint.report import _KIND_ORDER, format_finding, render_report
+from spoke_lint.report import (
+    _KIND_ORDER,
+    findings_to_json,
+    format_finding,
+    render_report,
+)
 
 
 def _finding(kind: str, flag: str, message: str) -> Finding:
@@ -149,3 +156,63 @@ class TestRenderReportDeterminism:
 def test_each_known_kind_renders(kind: str):
     f = _finding(kind, "flag", "message")
     assert render_report([f]) == format_finding(f)
+
+
+class TestFindingsToJson:
+    def test_empty_returns_empty_array(self):
+        assert findings_to_json([]) == "[]"
+
+    def test_single_finding_exact_keys_and_values(self):
+        f = _finding("unknown_flag", "bogus", "Unknown flag --bogus passed to x.py")
+        out = findings_to_json([f])
+        parsed = json.loads(out)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 1
+        obj = parsed[0]
+        assert set(obj.keys()) == {"kind", "flag", "message"}
+        assert obj["kind"] == "unknown_flag"
+        assert obj["flag"] == "bogus"
+        assert obj["message"] == "Unknown flag --bogus passed to x.py"
+
+    def test_multiple_preserves_input_order(self):
+        a = _finding("missing_tool", "ruff", "Tool ruff not on PATH")
+        b = _finding("unknown_flag", "z", "a flag finding")
+        c = _finding("missing_required", "topic", "Required flag --topic missing")
+        parsed = json.loads(findings_to_json([a, b, c]))
+        assert [o["flag"] for o in parsed] == ["ruff", "z", "topic"]
+        assert [o["kind"] for o in parsed] == [
+            "missing_tool",
+            "unknown_flag",
+            "missing_required",
+        ]
+
+    def test_round_trips_to_same_field_values(self):
+        findings = [
+            _finding("missing_script", "x.py", "Referenced script not found"),
+            _finding("unknown_flag", "a", "m1"),
+        ]
+        parsed = json.loads(findings_to_json(findings))
+        for original, obj in zip(findings, parsed, strict=True):
+            assert obj == {
+                "kind": original.kind,
+                "flag": original.flag,
+                "message": original.message,
+            }
+
+    def test_byte_deterministic_across_calls(self):
+        findings = [
+            _finding("missing_tool", "ruff", "Tool ruff not on PATH"),
+            _finding("unknown_flag", "bogus", "Unknown flag --bogus passed"),
+        ]
+        assert findings_to_json(findings) == findings_to_json(list(findings))
+
+    def test_no_trailing_newline(self):
+        f = _finding("missing_required", "topic", "Required flag --topic missing")
+        assert not findings_to_json([f]).endswith("\n")
+
+    def test_non_ascii_message_preserved(self):
+        # ensure_ascii=False keeps non-ASCII characters as-is in the output.
+        f = _finding("unknown_flag", "z", "caf\u00e9 message")
+        out = findings_to_json([f])
+        assert "caf\u00e9" in out
+        assert json.loads(out)[0]["message"] == "caf\u00e9 message"
