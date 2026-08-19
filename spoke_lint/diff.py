@@ -119,3 +119,35 @@ def diff_prompt(text: str, spokes_dir: Path, path: list[str] | None = None) -> l
     findings.extend(diff_gate_commands(text, path))
 
     return findings
+
+
+def diff_prompt_full(
+    text: str, spokes_dir: Path, path: list[str] | None = None
+) -> list[Finding]:
+    """Run the full lint pipeline and return every finding in one pass.
+
+    This is an explicit, self-documenting entry point for callers (and the later
+    CLI cycle) that want *all* findings — invocation mismatches **and** gate-command
+    tool checks — from a single call.
+
+    It delegates entirely to :func:`diff_prompt`, which already:
+
+    1. emits invocation findings in document order (``missing_script``,
+       ``unknown_flag``, ``missing_required``), then
+    2. appends gate-command findings in document order (``missing_tool``).
+
+    No behavior is duplicated or changed here; the function exists so the "lint the
+    whole prompt" operation has a stable, named API rather than relying on the
+    reader knowing that :func:`diff_prompt` also checks gate commands.
+
+    Args:
+        text: The runner prompt text.
+        spokes_dir: Directory containing the referenced spoke scripts.
+        path: Explicit list of directories used to resolve gate-command
+            executables; ``None`` means the current process ``PATH``.
+
+    Returns:
+        A deterministic list of :class:`Finding` — identical to
+        ``diff_prompt(text, spokes_dir, path)`` for the same inputs.
+    """
+    return diff_prompt(text, spokes_dir, path)

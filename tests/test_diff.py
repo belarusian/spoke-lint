@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from spoke_lint.diff import diff_invocation, diff_prompt
+from spoke_lint.diff import diff_invocation, diff_prompt, diff_prompt_full
 from spoke_lint.models import ArgSpec, Finding, Invocation
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -140,3 +140,34 @@ class TestDiffPrompt:
     def test_empty_prompt_yields_no_findings(self):
         assert diff_prompt("", FIXTURES) == []
         assert diff_prompt("just some prose\nno invocations", FIXTURES) == []
+
+
+class TestDiffPromptFull:
+    def test_equals_diff_prompt_for_invocation_findings(self):
+        text = (
+            "python3 /a/spokes/required_flag.py --bogus z\n"
+            "python3 /a/spokes/multi_args.py\n"
+        )
+        assert diff_prompt_full(text, FIXTURES) == diff_prompt(text, FIXTURES)
+
+    def test_equals_diff_prompt_with_missing_script(self):
+        text = "python3 /a/spokes/does-not-exist.py --topic hi"
+        assert diff_prompt_full(text, FIXTURES) == diff_prompt(text, FIXTURES)
+
+    def test_includes_gate_findings_like_diff_prompt(self):
+        # A gate line referencing a tool; pass an explicit empty-ish path so the
+        # tool is not resolvable and a missing_tool finding appears.
+        text = "pytest tests/ -x -q\n"
+        findings = diff_prompt_full(text, FIXTURES, path=["/nonexistent-dir-xyz"])
+        assert any(f.kind == "missing_tool" for f in findings)
+        # And it matches the underlying diff_prompt exactly.
+        assert findings == diff_prompt(text, FIXTURES, path=["/nonexistent-dir-xyz"])
+
+    def test_two_arg_call_uses_environment_path(self):
+        # Two-arg call must not raise and must equal the two-arg diff_prompt.
+        text = "python3 /a/spokes/required_flag.py --topic hi"
+        assert diff_prompt_full(text, FIXTURES) == diff_prompt(text, FIXTURES)
+
+    def test_valid_invocation_yields_no_findings(self):
+        text = "python3 /a/spokes/no_args.py\n"
+        assert diff_prompt_full(text, FIXTURES) == []
