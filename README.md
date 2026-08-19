@@ -26,3 +26,22 @@ of the human report (each element has `kind`, `flag`, and `message`). The exit-c
 contract is unchanged: `--json` only changes the stdout payload, never the code.
 
 Deterministic, stdlib-first, fully tested (pytest + ruff + mypy gate).
+
+## Development
+
+Install the package in editable mode:
+
+    pip install -e .
+
+Run the test suite:
+
+    pytest tests/ -q
+
+Run the gate (lint + type-check):
+
+    ruff check spoke_lint/ && mypy spoke_lint/ --ignore-missing-imports
+
+The package itself is stdlib-only (`dependencies = []`); `pytest`, `ruff`, and
+`mypy` are dev/test tools. Coverage is configured in `pyproject.toml`
+(`[tool.coverage.run]` / `[tool.coverage.report]`), so `coverage run -m pytest
+tests/ && coverage report` works out of the box.
