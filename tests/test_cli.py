@@ -73,7 +73,8 @@ class TestRunClean:
 
 class TestRunFindings:
     def test_unknown_flag_exit_1_report(self, tmp_path, capsys):
-        prompt = _write_prompt(tmp_path, "python3 /a/spokes/required_flag.py --topic hi --bogus z\n")
+        cmd = "python3 /a/spokes/required_flag.py --topic hi --bogus z\n"
+        prompt = _write_prompt(tmp_path, cmd)
         code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
         assert code == 1
         out = capsys.readouterr().out
