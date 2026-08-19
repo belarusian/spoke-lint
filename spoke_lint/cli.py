@@ -126,6 +126,12 @@ def _split_path(raw: str | None) -> list[str] | None:
     Returns ``None`` when ``raw`` is ``None`` (the option was not given), so the
     downstream pipeline falls back to the environment ``PATH``. Whitespace around
     each entry is stripped and empty entries are dropped.
+
+    Args:
+        raw: The raw ``--path`` value, or ``None`` when the flag was omitted.
+
+    Returns:
+        A list of directory strings, or ``None`` when ``raw`` is ``None``.
     """
     if raw is None:
         return None
@@ -139,6 +145,18 @@ def _run_check(args: argparse.Namespace) -> int:
     Reads the prompt file, runs the full lint pipeline, renders the report to
     stdout, and returns the contract exit code (``0`` clean / ``1`` findings /
     ``2`` I/O error). No exception escapes for a missing/unreadable prompt file.
+
+    Args:
+        args: The parsed ``check`` subcommand namespace (must carry
+            ``prompt_file``, ``spokes_dir``, ``path``, and ``json``).
+
+    Returns:
+        ``0`` when there are no findings, ``1`` when one or more exist, and ``2``
+        when the prompt file cannot be read.
+
+    Raises:
+        OSError: Not raised by this function — a missing/unreadable prompt file is
+            caught and translated into exit code ``2`` with a stderr message.
     """
     prompt_path = Path(args.prompt_file)
     try:

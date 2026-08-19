@@ -51,6 +51,13 @@ def _group_by_kind(findings: list[Finding]) -> list[tuple[str, list[Finding]]]:
     appended after, sorted alphabetically by kind name for determinism. Within each
     group the original input (document) order is preserved. Empty groups are
     omitted.
+
+    Args:
+        findings: The findings to group.
+
+    Returns:
+        A list of ``(kind, [finding, ...])`` pairs in the documented stable order;
+        empty when there are no findings.
     """
     buckets: dict[str, list[Finding]] = {}
     for finding in findings:

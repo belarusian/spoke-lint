@@ -20,7 +20,14 @@ _STORE_ACTIONS = frozenset({"store_true", "store_false", "count"})
 
 
 def _find_parser_names(tree: ast.Module) -> set[str]:
-    """Return the set of variable names bound to ``argparse.ArgumentParser(...)``."""
+    """Return the set of variable names bound to ``argparse.ArgumentParser(...)``.
+
+    Args:
+        tree: The parsed :class:`ast.Module` of a spoke script.
+
+    Returns:
+        A set of variable names (possibly empty).
+    """
     names: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
@@ -45,6 +52,13 @@ def _find_subparser_action_names(tree: ast.Module) -> set[str]:
 
     These names identify the subparser *action* object on which ``add_parser``
     is later called.
+
+    Args:
+        tree: The parsed :class:`ast.Module` of a spoke script.
+
+    Returns:
+        A set of variable names bound to ``add_subparsers(...)`` results (possibly
+        empty).
     """
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -65,6 +79,13 @@ def _find_subparser_names(tree: ast.Module, action_names: set[str]) -> set[str]:
 
     Only ``add_parser`` calls made on a tracked subparser action object
     (see :func:`_find_subparser_action_names`) are considered.
+
+    Args:
+        tree: The parsed :class:`ast.Module` of a spoke script.
+        action_names: Names bound to ``add_subparsers(...)`` results.
+
+    Returns:
+        A set of variable names bound to sub-parser objects (possibly empty).
     """
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -95,6 +116,13 @@ def _canonical_name(call: ast.Call) -> str | None:
       stripped) — preserving the existing short-flag behavior.
     - Else (no dashed option strings) the argument is positional and the first
       string literal is its name.
+
+    Args:
+        call: The ``add_argument(...)`` :class:`ast.Call` node.
+
+    Returns:
+        The canonical option name (dashes stripped), or ``None`` when the first
+        positional argument is not a string literal.
     """
     if not call.args:
         return None
@@ -119,7 +147,14 @@ def _canonical_name(call: ast.Call) -> str | None:
 
 
 def _nargs_value(call: ast.Call) -> str | int | None:
-    """Return the ``nargs=`` keyword value if it is a string or int literal."""
+    """Return the ``nargs=`` keyword value if it is a string or int literal.
+
+    Args:
+        call: The ``add_argument(...)`` :class:`ast.Call` node.
+
+    Returns:
+        The ``nargs=`` value when it is a string or int literal, else ``None``.
+    """
     for kw in call.keywords:
         if kw.arg == "nargs":
             val = kw.value
