@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 from spoke_lint.diff import diff_prompt_full
-from spoke_lint.report import render_report
+from spoke_lint.report import findings_to_json, render_report
 
 #: Default directory searched for referenced spoke scripts.
 DEFAULT_SPOKES_DIR: str = "./spokes"
@@ -108,6 +108,15 @@ def build_parser() -> argparse.ArgumentParser:
             "executables. When omitted, the current process PATH is used."
         ),
     )
+    check.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help=(
+            "Emit findings as a machine-readable JSON array on stdout instead of "
+            "the human report. The exit-code contract (0/1/2) is unchanged."
+        ),
+    )
     return parser
 
 
@@ -140,8 +149,8 @@ def _run_check(args: argparse.Namespace) -> int:
 
     path = _split_path(args.path)
     findings = diff_prompt_full(text, Path(args.spokes_dir), path)
-    report = render_report(findings)
-    print(report)
+    output = findings_to_json(findings) if args.json else render_report(findings)
+    print(output)
 
     return 0 if not findings else 1
 

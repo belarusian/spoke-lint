@@ -13,6 +13,8 @@ by kind name, so forward-compat kinds still render deterministically.
 
 from __future__ import annotations
 
+import json
+
 from spoke_lint.models import Finding
 
 #: Stable, documented order in which finding kinds are grouped in a report.
@@ -86,3 +88,27 @@ def render_report(findings: list[Finding]) -> str:
             lines.append(format_finding(finding))
 
     return "\n".join(lines)
+
+
+def findings_to_json(findings: list[Finding]) -> str:
+    """Serialize a list of findings to a deterministic JSON string.
+
+    The top level is a JSON **array** in input order (no reordering — determinism
+    comes from the caller passing already-ordered findings). Each finding becomes an
+    object with exactly the keys ``kind``, ``flag``, and ``message`` (matching the
+    :class:`~spoke_lint.models.Finding` fields), constructed explicitly in that fixed
+    field order.
+
+    Args:
+        findings: The findings to serialize, in the desired output order.
+
+    Returns:
+        A JSON array string (no trailing newline). An empty list serializes to the
+        two-character string ``"[]"``. Pure and deterministic: identical input yields
+        byte-identical output across calls.
+    """
+    objects = [
+        {"kind": finding.kind, "flag": finding.flag, "message": finding.message}
+        for finding in findings
+    ]
+    return json.dumps(objects, ensure_ascii=False)

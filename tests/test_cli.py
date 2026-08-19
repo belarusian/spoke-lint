@@ -9,6 +9,7 @@ executable plus an explicit ``--path`` so it never depends on the host's real PA
 
 from __future__ import annotations
 
+import json
 import stat
 from pathlib import Path
 
@@ -206,3 +207,66 @@ class TestMainGuard:
             )
             main()
         assert exc.value.code == 0
+
+
+class TestRunJson:
+    def test_json_flag_default_false(self):
+        ns = build_parser().parse_args(["check", "p.txt"])
+        assert ns.json is False
+
+    def test_json_flag_true_when_given(self):
+        ns = build_parser().parse_args(["check", "p.txt", "--json"])
+        assert ns.json is True
+
+    def test_clean_prompt_json_exit_0_empty_array(self, tmp_path, capsys):
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/no_args.py\n")
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES), "--json"])
+        assert code == 0
+        out = capsys.readouterr().out
+        assert out.strip() == "[]"
+        assert json.loads(out) == []
+
+    def test_unknown_flag_json_exit_1_valid_json(self, tmp_path, capsys):
+        cmd = "python3 /a/spokes/required_flag.py --topic hi --bogus z\n"
+        prompt = _write_prompt(tmp_path, cmd)
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES), "--json"])
+        assert code == 1
+        out = capsys.readouterr().out
+        parsed = json.loads(out)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 1
+        first = parsed[0]
+        assert set(first.keys()) == {"kind", "flag", "message"}
+        assert first["kind"] == "unknown_flag"
+        assert first["flag"] == "bogus"
+        assert "--bogus" in first["message"]
+
+    def test_missing_prompt_file_json_exit_2_stderr(self, tmp_path, capsys):
+        missing = tmp_path / "nope.txt"
+        code = run(["check", str(missing), "--spokes-dir", str(FIXTURES), "--json"])
+        assert code == 2
+        captured = capsys.readouterr()
+        assert "cannot read prompt file" in captured.err
+        # No exception escaped; stdout is empty.
+        assert captured.out == ""
+
+    def test_json_output_matches_findings_to_json(self, tmp_path, capsys):
+        # The --json payload must be byte-identical to findings_to_json of the
+        # same findings (the CLI stays a thin orchestration layer).
+        from spoke_lint.report import findings_to_json
+
+        cmd = "python3 /a/spokes/required_flag.py --topic hi --bogus z\n"
+        prompt = _write_prompt(tmp_path, cmd)
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES), "--json"])
+        assert code == 1
+        out = capsys.readouterr().out
+        expected = findings_to_json(
+            [
+                Finding(
+                    "unknown_flag",
+                    "bogus",
+                    "Unknown flag --bogus passed to /a/spokes/required_flag.py",
+                )
+            ]
+        )
+        assert out.strip() == expected

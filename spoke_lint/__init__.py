@@ -10,7 +10,7 @@ from spoke_lint.extractor import extract_invocations
 from spoke_lint.gate import diff_gate_commands, gate_commands
 from spoke_lint.models import ArgSpec, Finding, Invocation
 from spoke_lint.parser import canonical_names, parse_spoke, parse_spoke_args
-from spoke_lint.report import format_finding, render_report
+from spoke_lint.report import findings_to_json, format_finding, render_report
 
 __all__ = [
     "Invocation",
@@ -25,6 +25,7 @@ __all__ = [
     "diff_prompt_full",
     "gate_commands",
     "diff_gate_commands",
+    "findings_to_json",
     "format_finding",
     "render_report",
     "build_parser",
