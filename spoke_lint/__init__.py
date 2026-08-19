@@ -4,6 +4,7 @@ Diffs spoke invocations extracted from a runner prompt against the argparse
 signatures of the referenced spoke scripts, and renders deterministic reports.
 """
 
+from spoke_lint.cli import build_parser, run
 from spoke_lint.diff import diff_invocation, diff_prompt, diff_prompt_full
 from spoke_lint.extractor import extract_invocations
 from spoke_lint.gate import diff_gate_commands, gate_commands
@@ -26,4 +27,6 @@ __all__ = [
     "diff_gate_commands",
     "format_finding",
     "render_report",
+    "build_parser",
+    "run",
 ]

@@ -1,4 +1,4 @@
-"""Tests for spoke_lint package-level public API (TICKET-004, 007, 010, 014, 018, 026)."""
+"""Tests for spoke_lint package-level public API (TICKET-004, 007, 010, 014, 018, 026, 030)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ def test_public_api_importable():
         ArgSpec,
         Finding,
         Invocation,
+        build_parser,
         canonical_names,
         diff_gate_commands,
         diff_invocation,
@@ -19,6 +20,7 @@ def test_public_api_importable():
         parse_spoke,
         parse_spoke_args,
         render_report,
+        run,
     )
 
     assert Invocation is not None
@@ -35,6 +37,8 @@ def test_public_api_importable():
     assert callable(diff_gate_commands)
     assert callable(format_finding)
     assert callable(render_report)
+    assert callable(build_parser)
+    assert callable(run)
 
 
 def test_all_defined():
@@ -55,11 +59,15 @@ def test_all_defined():
         "diff_gate_commands",
         "format_finding",
         "render_report",
+        "build_parser",
+        "run",
     ]
 
 
 def test_exports_are_the_same_objects():
     import spoke_lint
+    from spoke_lint.cli import build_parser as _build_parser
+    from spoke_lint.cli import run as _run
     from spoke_lint.diff import diff_invocation as _diff_invocation
     from spoke_lint.diff import diff_prompt as _diff_prompt
     from spoke_lint.diff import diff_prompt_full as _diff_prompt_full
@@ -89,3 +97,5 @@ def test_exports_are_the_same_objects():
     assert spoke_lint.diff_gate_commands is _diff_gate
     assert spoke_lint.format_finding is _format_finding
     assert spoke_lint.render_report is _render_report
+    assert spoke_lint.build_parser is _build_parser
+    assert spoke_lint.run is _run
