@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from spoke_lint.extractor import extract_invocations
+from spoke_lint.gate import diff_gate_commands
 from spoke_lint.models import ArgSpec, Finding, Invocation
 from spoke_lint.parser import canonical_names, parse_spoke_args
 
@@ -64,7 +65,7 @@ def diff_invocation(invocation: Invocation, specs: list[ArgSpec]) -> list[Findin
     return findings
 
 
-def diff_prompt(text: str, spokes_dir: Path) -> list[Finding]:
+def diff_prompt(text: str, spokes_dir: Path, path: list[str] | None = None) -> list[Finding]:
     """Diff every invocation in a prompt against the spokes under ``spokes_dir``.
 
     Top-level entry point. For each invocation (in document order):
@@ -83,9 +84,14 @@ def diff_prompt(text: str, spokes_dir: Path) -> list[Finding]:
     Args:
         text: The runner prompt text.
         spokes_dir: Directory containing the referenced spoke scripts.
+        path: An explicit list of directory paths used to resolve gate-command
+            executables (see :func:`spoke_lint.gate.diff_gate_commands`). When
+            ``None``, the current process ``PATH`` is used.
 
     Returns:
-        A list of :class:`Finding`, empty when every invocation is fully valid.
+        A list of :class:`Finding`. Invocation findings come first (in document
+        order), followed by gate-command findings (in document order). Empty
+        when every invocation is fully valid and every gate tool is resolvable.
     """
     invocations = extract_invocations(text)
     findings: list[Finding] = []
@@ -106,5 +112,10 @@ def diff_prompt(text: str, spokes_dir: Path) -> list[Finding]:
 
         specs = parse_spoke_args(resolved)
         findings.extend(diff_invocation(invocation, specs))
+
+    # Gate-command findings come after all invocation findings, in document
+    # order. This keeps the ordering deterministic and non-regressing for the
+    # existing invocation behavior.
+    findings.extend(diff_gate_commands(text, path))
 
     return findings
