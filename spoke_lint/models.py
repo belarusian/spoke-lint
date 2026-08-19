@@ -45,3 +45,20 @@ class ArgSpec:
     name: str
     required: bool = False
     default: str | None = None
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One problem found by the diff engine.
+
+    Attributes:
+        kind: Stable category string. Cycle 5 uses ``"unknown_flag"``,
+            ``"missing_required"``, and ``"missing_script"``.
+        flag: The argument name (canonical, dashes stripped) the finding is
+            about; for ``missing_script`` this is the referenced script path.
+        message: A human-readable one-line description.
+    """
+
+    kind: str
+    flag: str
+    message: str
