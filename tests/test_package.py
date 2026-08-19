@@ -1,4 +1,4 @@
-"""Tests for spoke_lint package-level public API (TICKET-004, 007, 010, 014, 018)."""
+"""Tests for spoke_lint package-level public API (TICKET-004, 007, 010, 014, 018, 026)."""
 
 from __future__ import annotations
 
@@ -12,10 +12,13 @@ def test_public_api_importable():
         diff_gate_commands,
         diff_invocation,
         diff_prompt,
+        diff_prompt_full,
         extract_invocations,
+        format_finding,
         gate_commands,
         parse_spoke,
         parse_spoke_args,
+        render_report,
     )
 
     assert Invocation is not None
@@ -27,8 +30,11 @@ def test_public_api_importable():
     assert callable(canonical_names)
     assert callable(diff_invocation)
     assert callable(diff_prompt)
+    assert callable(diff_prompt_full)
     assert callable(gate_commands)
     assert callable(diff_gate_commands)
+    assert callable(format_finding)
+    assert callable(render_report)
 
 
 def test_all_defined():
@@ -44,8 +50,11 @@ def test_all_defined():
         "canonical_names",
         "diff_invocation",
         "diff_prompt",
+        "diff_prompt_full",
         "gate_commands",
         "diff_gate_commands",
+        "format_finding",
+        "render_report",
     ]
 
 
@@ -53,6 +62,7 @@ def test_exports_are_the_same_objects():
     import spoke_lint
     from spoke_lint.diff import diff_invocation as _diff_invocation
     from spoke_lint.diff import diff_prompt as _diff_prompt
+    from spoke_lint.diff import diff_prompt_full as _diff_prompt_full
     from spoke_lint.extractor import extract_invocations as _extract
     from spoke_lint.gate import diff_gate_commands as _diff_gate
     from spoke_lint.gate import gate_commands as _gate
@@ -62,6 +72,8 @@ def test_exports_are_the_same_objects():
     from spoke_lint.parser import canonical_names as _canonical
     from spoke_lint.parser import parse_spoke as _parse_spoke
     from spoke_lint.parser import parse_spoke_args as _parse
+    from spoke_lint.report import format_finding as _format_finding
+    from spoke_lint.report import render_report as _render_report
 
     assert spoke_lint.Invocation is _Invocation
     assert spoke_lint.ArgSpec is _ArgSpec
@@ -72,5 +84,8 @@ def test_exports_are_the_same_objects():
     assert spoke_lint.canonical_names is _canonical
     assert spoke_lint.diff_invocation is _diff_invocation
     assert spoke_lint.diff_prompt is _diff_prompt
+    assert spoke_lint.diff_prompt_full is _diff_prompt_full
     assert spoke_lint.gate_commands is _gate
     assert spoke_lint.diff_gate_commands is _diff_gate
+    assert spoke_lint.format_finding is _format_finding
+    assert spoke_lint.render_report is _render_report
