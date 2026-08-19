@@ -1,0 +1,161 @@
+"""Tests for spoke_lint.cli: build_parser, run, and the exit-code contract (TICKET-029).
+
+All tests are hermetic: they write prompt files under ``tmp_path`` and call
+``run([...])`` in-process (no subprocesses), capturing stdout/stderr with
+``capsys``. The gate-tool case uses a temp-dir fake executable plus an explicit
+``--path`` so it never depends on the host's real PATH.
+"""
+
+from __future__ import annotations
+
+import stat
+from pathlib import Path
+
+import pytest
+
+from spoke_lint.cli import build_parser, run
+from spoke_lint.models import Finding
+from spoke_lint.report import render_report
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _write_prompt(tmp_path: Path, text: str) -> Path:
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text(text, encoding="utf-8")
+    return prompt
+
+
+def _make_executable(path: Path) -> None:
+    path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    mode = path.stat().st_mode
+    path.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
+class TestBuildParser:
+    def test_returns_argparse_parser(self):
+        import argparse
+
+        assert isinstance(build_parser(), argparse.ArgumentParser)
+
+    def test_defaults(self):
+        ns = build_parser().parse_args(["prompt.txt"])
+        assert ns.prompt_file == "prompt.txt"
+        assert ns.spokes_dir == "./spokes"
+        assert ns.path is None
+
+    def test_explicit_options(self):
+        ns = build_parser().parse_args(["p.txt", "--spokes-dir", "D", "--path", "a,b"])
+        assert ns.prompt_file == "p.txt"
+        assert ns.spokes_dir == "D"
+        assert ns.path == "a,b"
+
+
+class TestRunClean:
+    def test_valid_prompt_exit_0_stdout_ok(self, tmp_path, capsys):
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/no_args.py\n")
+        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        assert code == 0
+        out = capsys.readouterr().out
+        assert out.strip() == "OK"
+
+
+class TestRunFindings:
+    def test_unknown_flag_exit_1_report(self, tmp_path, capsys):
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/required_flag.py --topic hi --bogus z\n")
+        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        assert code == 1
+        out = capsys.readouterr().out
+        expected = render_report(
+            [
+                Finding(
+                    "unknown_flag",
+                    "bogus",
+                    "Unknown flag --bogus passed to /a/spokes/required_flag.py",
+                )
+            ]
+        )
+        assert out.strip() == expected
+
+    def test_missing_required_exit_1_report(self, tmp_path, capsys):
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/required_flag.py\n")
+        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        assert code == 1
+        out = capsys.readouterr().out
+        assert "missing_required" in out
+        assert "topic" in out
+
+    def test_missing_script_exit_1(self, tmp_path, capsys):
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/does-not-exist.py --topic hi\n")
+        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        assert code == 1
+        out = capsys.readouterr().out
+        assert "missing_script" in out
+        assert "/a/spokes/does-not-exist.py" in out
+
+
+class TestRunGateTool:
+    def test_missing_tool_exit_1_via_path(self, tmp_path, capsys):
+        # A gate line referencing a tool; point --path at an empty temp dir so it
+        # is not resolvable. Hermetic: no host-PATH dependence.
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        prompt = _write_prompt(tmp_path, "pytest tests/ -x -q\n")
+        code = run([str(prompt), "--spokes-dir", str(FIXTURES), "--path", str(empty_dir)])
+        assert code == 1
+        out = capsys.readouterr().out
+        assert "missing_tool" in out
+        assert "pytest" in out
+
+    def test_present_tool_no_finding_via_path(self, tmp_path, capsys):
+        # A fake executable on the explicit --path resolves cleanly -> no findings.
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        _make_executable(bin_dir / "pytest")
+        prompt = _write_prompt(tmp_path, "pytest tests/ -x -q\n")
+        code = run([str(prompt), "--spokes-dir", str(FIXTURES), "--path", str(bin_dir)])
+        assert code == 0
+        out = capsys.readouterr().out
+        assert out.strip() == "OK"
+
+
+class TestRunIOError:
+    def test_missing_prompt_file_exit_2_stderr(self, tmp_path, capsys):
+        missing = tmp_path / "nope.txt"
+        code = run([str(missing), "--spokes-dir", str(FIXTURES)])
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "cannot read prompt file" in err
+        # No exception escaped; stdout is empty.
+        assert capsys.readouterr().out == ""
+
+
+class TestRunPathSplitting:
+    def test_path_comma_split_and_whitespace(self, tmp_path, capsys):
+        # Two comma-separated dirs with surrounding whitespace; the tool lives in
+        # the second dir so it resolves -> clean.
+        bin_dir = tmp_path / "bin2"
+        bin_dir.mkdir()
+        _make_executable(bin_dir / "ruff")
+        other = tmp_path / "other"
+        other.mkdir()
+        prompt = _write_prompt(tmp_path, "ruff check spoke_lint/\n")
+        code = run(
+            [str(prompt), "--spokes-dir", str(FIXTURES), "--path", f"{other}, {bin_dir}"]
+        )
+        assert code == 0
+        assert capsys.readouterr().out.strip() == "OK"
+
+
+class TestMainGuard:
+    def test_main_exits_with_run_code(self, tmp_path, monkeypatch):
+        # main() calls sys.exit(run()); verify it propagates the exit code.
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/no_args.py\n")
+        with pytest.raises(SystemExit) as exc:
+            from spoke_lint.cli import main
+
+            monkeypatch.setattr(
+                "sys.argv", ["spoke-lint", str(prompt), "--spokes-dir", str(FIXTURES)]
+            )
+            main()
+        assert exc.value.code == 0
