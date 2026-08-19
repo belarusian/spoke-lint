@@ -33,7 +33,14 @@ _PYTHON_INTERP_RE = re.compile(r"^(?:python3?|/\S*/python3?)$")
 
 
 def _is_python_interpreter(token: str) -> bool:
-    """Return True if ``token`` is a python interpreter (a spoke invocation)."""
+    """Return True if ``token`` is a python interpreter (a spoke invocation).
+
+    Args:
+        token: A single whitespace-separated command token.
+
+    Returns:
+        ``True`` when ``token`` is a python interpreter, else ``False``.
+    """
     return bool(_PYTHON_INTERP_RE.match(token))
 
 
@@ -45,6 +52,12 @@ def _is_command_like(tokens: list[str]) -> bool:
     argument that is a flag (starts with ``-``), a path (contains ``/``), or a
     file name (contains ``.``). Lines made up only of plain words (prose) are
     not commands and are ignored.
+
+    Args:
+        tokens: The whitespace-separated tokens of a single line.
+
+    Returns:
+        ``True`` when the line looks like a command, else ``False``.
     """
     if len(tokens) == 1:
         return True

@@ -83,6 +83,14 @@ def extract_invocations(text: str) -> list[Invocation]:
     A line is an invocation when, after stripping leading whitespace, it starts
     with a python interpreter (optionally preceded by env-var prefixes) followed
     by a ``.py`` script path that contains a ``/spokes/`` segment.
+
+    Args:
+        text: The runner prompt text to scan.
+
+    Returns:
+        A list of :class:`~spoke_lint.models.Invocation` in document order. Empty
+        when the prompt contains no invocation lines. Pure and deterministic: no
+        I/O, no side effects.
     """
     invocations: list[Invocation] = []
     for line in text.splitlines():

@@ -27,6 +27,31 @@ contract is unchanged: `--json` only changes the stdout payload, never the code.
 
 Deterministic, stdlib-first, fully tested (pytest + ruff + mypy gate).
 
+## API
+
+`spoke-lint` is also a library. The stable public surface is `spoke_lint.__all__`;
+import from the package root (`from spoke_lint import ...`). The pipeline is layered
+so each stage can be used on its own:
+
+| Entry point | Description |
+|---|---|
+| `extract_invocations(text)` | Extract spoken invocation lines from a prompt as `Invocation` objects, in document order. |
+| `parse_spoke_args(path)` | Parse a spoke script's AST and return its argparse arguments as `ArgSpec` objects, in source order. |
+| `parse_spoke(path)` | Convenience wrapper returning `{canonical_name: ArgSpec}` for O(1) lookup. |
+| `canonical_names(specs)` | The set of canonical accepted argument names from a list of `ArgSpec`. |
+| `diff_invocation(invocation, specs)` | Diff one invocation against a spoke's signature; returns `Finding` objects. |
+| `diff_prompt(text, spokes_dir, path=None)` | Diff every invocation in a prompt (plus gate commands) against the spokes under `spokes_dir`. |
+| `diff_prompt_full(text, spokes_dir, path=None)` | Explicit "lint the whole prompt" entry point; identical to `diff_prompt`. |
+| `gate_commands(text)` | Extract the leading executable of each shell gate line, in document order. |
+| `diff_gate_commands(text, path=None)` | Flag gate tools not resolvable on `path` as `missing_tool` findings. |
+| `render_report(findings)` | Render findings as a deterministic human-readable report (`"OK"` when empty). |
+| `findings_to_json(findings)` | Serialize findings to a deterministic JSON array string (`"[]"` when empty). |
+| `format_finding(finding)` | Render a single finding as one stable line. |
+| `build_parser()` | Build the CLI argument parser (a thin orchestration layer). |
+| `run(argv=None)` | Run the CLI in-process and return the exit code (`0`/`1`/`2`). |
+
+The value objects shared across layers are `Invocation`, `ArgSpec`, and `Finding`.
+
 ## Development
 
 Install the package in editable mode:
