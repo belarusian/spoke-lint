@@ -6,6 +6,12 @@ signatures of the referenced spoke scripts.
 
 from spoke_lint.extractor import extract_invocations
 from spoke_lint.models import ArgSpec, Invocation
-from spoke_lint.parser import parse_spoke_args
+from spoke_lint.parser import parse_spoke, parse_spoke_args
 
-__all__ = ["Invocation", "ArgSpec", "extract_invocations", "parse_spoke_args"]
+__all__ = [
+    "Invocation",
+    "ArgSpec",
+    "extract_invocations",
+    "parse_spoke_args",
+    "parse_spoke",
+]

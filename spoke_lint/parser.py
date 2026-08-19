@@ -12,6 +12,8 @@ from pathlib import Path
 
 from spoke_lint.models import ArgSpec
 
+_STORE_ACTIONS = frozenset({"store_true", "store_false", "count"})
+
 
 def _find_parser_names(tree: ast.Module) -> set[str]:
     """Return the set of variable names bound to ``argparse.ArgumentParser(...)``."""
@@ -38,14 +40,42 @@ def _extract_arg_spec(call: ast.Call) -> ArgSpec | None:
     """Extract an :class:`ArgSpec` from a single ``add_argument(...)`` call node.
 
     Returns ``None`` when the first positional argument is not a string literal.
+
+    Rules (applied in order):
+    1. **Positional argument**: if the first string literal has no leading dash,
+       emit ``ArgSpec(name=<name>, required=True, default=None)`` regardless of
+       any other keywords.
+    2. **Store-type actions**: if an ``action=`` keyword is a string literal in
+       ``{"store_true", "store_false", "count"}``, emit
+       ``ArgSpec(name=<name>, required=False, default=None)`` and ignore any
+       ``default=`` / ``type=`` keywords.
+    3. **Default dashed-flag handling**: strip leading dashes, honour
+       ``required=`` and ``default=`` keywords as before.
     """
     if not call.args:
         return None
     first = call.args[0]
     if not isinstance(first, ast.Constant) or not isinstance(first.value, str):
         return None
-    name = first.value.lstrip("-")
+    raw = first.value
+    name = raw.lstrip("-")
 
+    # Rule 1: positional argument (no leading dash)
+    if not raw.startswith("-"):
+        return ArgSpec(name=name, required=True, default=None)
+
+    # Rule 2: store-type actions
+    for kw in call.keywords:
+        if kw.arg == "action":
+            if (
+                isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+                and kw.value.value in _STORE_ACTIONS
+            ):
+                return ArgSpec(name=name, required=False, default=None)
+            break
+
+    # Rule 3: default dashed-flag handling (existing behavior)
     required = False
     for kw in call.keywords:
         if kw.arg == "required":
@@ -112,3 +142,30 @@ def parse_spoke_args(path: str | Path) -> list[ArgSpec]:
         if spec is not None:
             specs.append(spec)
     return specs
+
+
+def parse_spoke(path: str | Path) -> dict[str, ArgSpec]:
+    """Parse a spoke script and return its arguments as a name-keyed dict.
+
+    This is a convenience wrapper around :func:`parse_spoke_args` that returns
+    ``{canonical_name: ArgSpec}`` for O(1) lookup by the diff engine.
+
+    **Duplicate names: last one wins.** If the same canonical name appears in
+    multiple ``add_argument`` calls, the later (last) spec overwrites the
+    earlier one in the returned dict.
+
+    Args:
+        path: Path to the spoke script file.
+
+    Returns:
+        A dict mapping canonical argument names (dashes stripped) to their
+        :class:`~spoke_lint.models.ArgSpec`.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+    """
+    specs = parse_spoke_args(path)
+    result: dict[str, ArgSpec] = {}
+    for spec in specs:
+        result[spec.name] = spec
+    return result
