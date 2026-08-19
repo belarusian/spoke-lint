@@ -14,6 +14,11 @@ Given a runner prompt file and a spokes directory, `spoke-lint`:
 
 ## CLI
 
-    spoke-lint check <runner-prompt> --spokes-dir <dir>
+    spoke-lint check <runner-prompt> --spokes-dir <dir> [--path DIR1,DIR2,...]
+
+`check` is the only subcommand. `--spokes-dir` defaults to `./spokes`; `--path`
+optionally overrides the directories used to resolve gate-command tools (defaults
+to the current process `PATH`). The report is printed to stdout; errors go to
+stderr. Exit code: `0` when clean, `1` when findings exist, `2` on usage/IO error.
 
 Deterministic, stdlib-first, fully tested (pytest + ruff + mypy gate).

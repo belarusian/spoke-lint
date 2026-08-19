@@ -1,9 +1,10 @@
-"""Tests for spoke_lint.cli: build_parser, run, and the exit-code contract (TICKET-029).
+"""Tests for spoke_lint.cli: build_parser, run, and the exit-code contract (TICKET-031..033).
 
 All tests are hermetic: they write prompt files under ``tmp_path`` and call
 ``run([...])`` in-process (no subprocesses), capturing stdout/stderr with
-``capsys``. The gate-tool case uses a temp-dir fake executable plus an explicit
-``--path`` so it never depends on the host's real PATH.
+``capsys``. The CLI is a **subcommand** interface, so every invocation argv is
+prefixed with the ``check`` subcommand. The gate-tool case uses a temp-dir fake
+executable plus an explicit ``--path`` so it never depends on the host's real PATH.
 """
 
 from __future__ import annotations
@@ -39,22 +40,32 @@ class TestBuildParser:
         assert isinstance(build_parser(), argparse.ArgumentParser)
 
     def test_defaults(self):
-        ns = build_parser().parse_args(["prompt.txt"])
+        ns = build_parser().parse_args(["check", "prompt.txt"])
+        assert ns.command == "check"
         assert ns.prompt_file == "prompt.txt"
         assert ns.spokes_dir == "./spokes"
         assert ns.path is None
 
     def test_explicit_options(self):
-        ns = build_parser().parse_args(["p.txt", "--spokes-dir", "D", "--path", "a,b"])
+        ns = build_parser().parse_args(
+            ["check", "p.txt", "--spokes-dir", "D", "--path", "a,b"]
+        )
+        assert ns.command == "check"
         assert ns.prompt_file == "p.txt"
         assert ns.spokes_dir == "D"
         assert ns.path == "a,b"
+
+    def test_subcommand_is_required(self):
+        # A call with no subcommand is a usage error: argparse exits non-zero.
+        with pytest.raises(SystemExit) as exc:
+            build_parser().parse_args([])
+        assert exc.value.code != 0
 
 
 class TestRunClean:
     def test_valid_prompt_exit_0_stdout_ok(self, tmp_path, capsys):
         prompt = _write_prompt(tmp_path, "python3 /a/spokes/no_args.py\n")
-        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
         assert code == 0
         out = capsys.readouterr().out
         assert out.strip() == "OK"
@@ -63,7 +74,7 @@ class TestRunClean:
 class TestRunFindings:
     def test_unknown_flag_exit_1_report(self, tmp_path, capsys):
         prompt = _write_prompt(tmp_path, "python3 /a/spokes/required_flag.py --topic hi --bogus z\n")
-        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
         assert code == 1
         out = capsys.readouterr().out
         expected = render_report(
@@ -79,7 +90,7 @@ class TestRunFindings:
 
     def test_missing_required_exit_1_report(self, tmp_path, capsys):
         prompt = _write_prompt(tmp_path, "python3 /a/spokes/required_flag.py\n")
-        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
         assert code == 1
         out = capsys.readouterr().out
         assert "missing_required" in out
@@ -87,7 +98,7 @@ class TestRunFindings:
 
     def test_missing_script_exit_1(self, tmp_path, capsys):
         prompt = _write_prompt(tmp_path, "python3 /a/spokes/does-not-exist.py --topic hi\n")
-        code = run([str(prompt), "--spokes-dir", str(FIXTURES)])
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
         assert code == 1
         out = capsys.readouterr().out
         assert "missing_script" in out
@@ -101,7 +112,9 @@ class TestRunGateTool:
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
         prompt = _write_prompt(tmp_path, "pytest tests/ -x -q\n")
-        code = run([str(prompt), "--spokes-dir", str(FIXTURES), "--path", str(empty_dir)])
+        code = run(
+            ["check", str(prompt), "--spokes-dir", str(FIXTURES), "--path", str(empty_dir)]
+        )
         assert code == 1
         out = capsys.readouterr().out
         assert "missing_tool" in out
@@ -113,7 +126,9 @@ class TestRunGateTool:
         bin_dir.mkdir()
         _make_executable(bin_dir / "pytest")
         prompt = _write_prompt(tmp_path, "pytest tests/ -x -q\n")
-        code = run([str(prompt), "--spokes-dir", str(FIXTURES), "--path", str(bin_dir)])
+        code = run(
+            ["check", str(prompt), "--spokes-dir", str(FIXTURES), "--path", str(bin_dir)]
+        )
         assert code == 0
         out = capsys.readouterr().out
         assert out.strip() == "OK"
@@ -122,7 +137,7 @@ class TestRunGateTool:
 class TestRunIOError:
     def test_missing_prompt_file_exit_2_stderr(self, tmp_path, capsys):
         missing = tmp_path / "nope.txt"
-        code = run([str(missing), "--spokes-dir", str(FIXTURES)])
+        code = run(["check", str(missing), "--spokes-dir", str(FIXTURES)])
         assert code == 2
         err = capsys.readouterr().err
         assert "cannot read prompt file" in err
@@ -141,10 +156,41 @@ class TestRunPathSplitting:
         other.mkdir()
         prompt = _write_prompt(tmp_path, "ruff check spoke_lint/\n")
         code = run(
-            [str(prompt), "--spokes-dir", str(FIXTURES), "--path", f"{other}, {bin_dir}"]
+            [
+                "check",
+                str(prompt),
+                "--spokes-dir",
+                str(FIXTURES),
+                "--path",
+                f"{other}, {bin_dir}",
+            ]
         )
         assert code == 0
         assert capsys.readouterr().out.strip() == "OK"
+
+
+class TestRunSubcommandErrors:
+    def test_no_subcommand_nonzero_no_traceback(self, capsys):
+        # A call with no subcommand is a usage error -> non-zero (typically 2),
+        # and run must not raise.
+        code = run([])
+        assert code != 0
+        assert code == 2
+        # argparse printed its usage/error to stderr; nothing on stdout.
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "check" in captured.err or "usage" in captured.err.lower()
+
+    def test_unknown_subcommand_nonzero_no_traceback(self, tmp_path, capsys):
+        # An unrecognized subcommand is a usage error -> non-zero (typically 2),
+        # and run must not raise.
+        prompt = _write_prompt(tmp_path, "python3 /a/spokes/no_args.py\n")
+        code = run(["bogus", str(prompt)])
+        assert code != 0
+        assert code == 2
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "bogus" in captured.err or "usage" in captured.err.lower()
 
 
 class TestMainGuard:
@@ -155,7 +201,7 @@ class TestMainGuard:
             from spoke_lint.cli import main
 
             monkeypatch.setattr(
-                "sys.argv", ["spoke-lint", str(prompt), "--spokes-dir", str(FIXTURES)]
+                "sys.argv", ["spoke-lint", "check", str(prompt), "--spokes-dir", str(FIXTURES)]
             )
             main()
         assert exc.value.code == 0
