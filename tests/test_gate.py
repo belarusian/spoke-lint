@@ -163,3 +163,57 @@ class TestDiffPromptGateIntegration:
         text = "python3 /a/spokes/required_flag.py --topic hi\npytest"
         findings = diff_prompt(text, FIXTURES)
         assert [(f.kind, f.flag) for f in findings] == [("missing_tool", "pytest")]
+
+
+class TestFencedCodeBlocks:
+    """Markdown-awareness: lines inside fenced code blocks are ignored."""
+
+    def test_gate_tool_inside_fence_not_detected(self):
+        text = (
+            "```\n"
+            "pytest\n"
+            "```\n"
+        )
+        assert gate_commands(text) == []
+
+    def test_gate_tool_outside_fence_detected(self):
+        # Regression guard: a real gate line outside any code block is found.
+        assert gate_commands("pytest") == ["pytest"]
+
+    def test_fence_with_gate_examples_then_real_outside(self):
+        # A fenced block with pytest/ruff/mypy example lines, plus a real
+        # `pytest` outside -> only the real one is detected.
+        text = (
+            "```\n"
+            "pytest\n"
+            "ruff check spoke_lint/\n"
+            "mypy spoke_lint/\n"
+            "```\n"
+            "pytest\n"
+        )
+        assert gate_commands(text) == ["pytest"]
+
+    def test_unclosed_fence_ignores_rest(self):
+        # An opening fence with no closing fence -> everything after is ignored.
+        text = (
+            "pytest\n"
+            "```\n"
+            "ruff check spoke_lint/\n"
+        )
+        assert gate_commands(text) == ["pytest"]
+
+    def test_diff_gate_commands_only_gate_line_in_fence_no_findings(
+        self, tmp_path, monkeypatch
+    ):
+        # A prompt whose only gate line is inside a code block yields NO
+        # missing_tool findings, even on an empty PATH.
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()  # empty: nothing resolvable
+        monkeypatch.setenv("PATH", str(bin_dir))
+        text = (
+            "```\n"
+            "pytest\n"
+            "ruff check spoke_lint/\n"
+            "```\n"
+        )
+        assert diff_gate_commands(text) == []

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+from spoke_lint.markdown import iter_lines_outside_code_blocks
 from spoke_lint.models import Invocation
 
 # Matches a spoke invocation line, anchored at the start of the stripped line.
@@ -84,6 +85,11 @@ def extract_invocations(text: str) -> list[Invocation]:
     with a python interpreter (optionally preceded by env-var prefixes) followed
     by a ``.py`` script path that contains a ``/spokes/`` segment.
 
+    The scan is markdown-aware: lines inside fenced code blocks (and the fence
+    delimiter lines themselves) are ignored, so an *illustrative* invocation
+    shown in a fenced block does not produce a finding. Only real invocation
+    lines that appear outside a fenced block are extracted.
+
     Args:
         text: The runner prompt text to scan.
 
@@ -93,7 +99,7 @@ def extract_invocations(text: str) -> list[Invocation]:
         I/O, no side effects.
     """
     invocations: list[Invocation] = []
-    for line in text.splitlines():
+    for _index, line in iter_lines_outside_code_blocks(text):
         stripped = line.strip()
         if not stripped:
             continue

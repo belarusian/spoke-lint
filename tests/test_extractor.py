@@ -115,3 +115,69 @@ class TestEdgeCases:
         text = 'python3 /a/spokes/b.py --topic "hello world"'
         result = extract_invocations(text)
         assert result[0].args == (("--topic", "hello world"),)
+
+
+class TestFencedCodeBlocks:
+    """Markdown-awareness: lines inside fenced code blocks are ignored."""
+
+    def test_invocation_inside_fence_not_extracted(self):
+        text = (
+            "```\n"
+            "python3 /a/spokes/ghost.py --x y\n"
+            "```\n"
+        )
+        assert extract_invocations(text) == []
+
+    def test_invocation_outside_fence_extracted(self):
+        # Regression guard: a real invocation outside any code block is found.
+        text = "python3 /a/spokes/real.py --goal g"
+        result = extract_invocations(text)
+        assert len(result) == 1
+        assert result[0].script_path == "/a/spokes/real.py"
+
+    def test_non_spoke_snippet_in_fence_then_real_outside(self):
+        # A fenced block with a non-spoke python snippet, then a real spoke
+        # invocation outside the block -> only the real one is extracted.
+        text = (
+            "```\n"
+            "python3 /a/tools/helper.py --goal g\n"
+            "```\n"
+            "python3 /a/spokes/real.py --goal g\n"
+        )
+        result = extract_invocations(text)
+        assert len(result) == 1
+        assert result[0].script_path == "/a/spokes/real.py"
+
+    def test_fence_delimiter_lines_never_invocations(self):
+        # The fence delimiter lines themselves are never treated as invocations.
+        text = (
+            "```\n"
+            "```\n"
+            "python3 /a/spokes/real.py --goal g\n"
+        )
+        result = extract_invocations(text)
+        assert len(result) == 1
+        assert result[0].script_path == "/a/spokes/real.py"
+
+    def test_unclosed_fence_ignores_rest(self):
+        # An opening fence with no closing fence -> everything after is ignored.
+        text = (
+            "python3 /a/spokes/real.py --goal g\n"
+            "```\n"
+            "python3 /a/spokes/ghost.py --x y\n"
+        )
+        result = extract_invocations(text)
+        assert len(result) == 1
+        assert result[0].script_path == "/a/spokes/real.py"
+
+    def test_language_tagged_fence_same_as_bare(self):
+        # A fenced block with a language tag is handled the same as a bare fence.
+        text = (
+            "```python\n"
+            "python3 /a/spokes/ghost.py --x y\n"
+            "```\n"
+            "python3 /a/spokes/real.py --goal g\n"
+        )
+        result = extract_invocations(text)
+        assert len(result) == 1
+        assert result[0].script_path == "/a/spokes/real.py"
