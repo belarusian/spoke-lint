@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 
+from spoke_lint.markdown import iter_lines_outside_code_blocks
 from spoke_lint.models import Finding
 
 # A leading run of ``VAR=value`` env-var prefixes, each followed by whitespace.
@@ -78,6 +79,11 @@ def gate_commands(text: str) -> list[str]:
     a gate command when it is command-like (see :func:`_is_command_like`);
     free-form prose is ignored.
 
+    The scan is markdown-aware: lines inside fenced code blocks (and the fence
+    delimiter lines themselves) are ignored, so an *illustrative* gate command
+    shown in a fenced block does not produce a finding. Only real gate lines
+    that appear outside a fenced block are detected.
+
     Args:
         text: The runner prompt text.
 
@@ -86,7 +92,7 @@ def gate_commands(text: str) -> list[str]:
         no dedup is performed.
     """
     commands: list[str] = []
-    for line in text.splitlines():
+    for _index, line in iter_lines_outside_code_blocks(text):
         stripped = line.strip()
         if not stripped:
             continue
