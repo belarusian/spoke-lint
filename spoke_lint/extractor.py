@@ -29,20 +29,54 @@ _INVOCATION_RE = re.compile(
     re.VERBOSE,
 )
 
-# A token is a double-quoted string, a single-quoted string, or a run of
-# non-whitespace characters. Quoted strings may contain spaces.
-_TOKEN_RE = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
-
-
 def _tokenize(text: str) -> list[str]:
-    """Split ``text`` into tokens, preserving quoted strings as single tokens."""
-    return _TOKEN_RE.findall(text)
+    """Split ``text`` into tokens, respecting quote boundaries.
+
+    A double- or single-quoted run is a single token. If a quote is opened but
+    never closed on the line (e.g. a heredoc-embedded invocation whose quoted
+    value continues on a later line), the remainder of the line is consumed as
+    the value so that flag-like text inside the quote (``--name``, ``-m``) is
+    not mistaken for a flag.
+    """
+    tokens: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch.isspace():
+            i += 1
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+            j = i + 1
+            while j < n and text[j] != quote:
+                j += 1
+            if j < n:
+                tokens.append(text[i : j + 1])
+                i = j + 1
+            else:
+                tokens.append(text[i:])
+                i = n
+        else:
+            j = i
+            while j < n and not text[j].isspace():
+                j += 1
+            tokens.append(text[i:j])
+            i = j
+    return tokens
 
 
 def _unquote(token: str) -> str:
-    """Strip one pair of surrounding single or double quotes, if present."""
+    """Strip surrounding quotes from ``token``.
+
+    A balanced quoted token (``"x"`` / ``'x'``) loses both quotes. An
+    unterminated quoted token (``"x ...`` — a value that continues on a later
+    line) loses its leading quote. An unquoted token is returned unchanged.
+    """
     if len(token) >= 2 and token[0] == token[-1] and token[0] in ("'", '"'):
         return token[1:-1]
+    if token and token[0] in ("'", '"'):
+        return token[1:]
     return token
 
 

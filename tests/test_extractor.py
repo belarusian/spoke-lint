@@ -181,3 +181,47 @@ class TestFencedCodeBlocks:
         result = extract_invocations(text)
         assert len(result) == 1
         assert result[0].script_path == "/a/spokes/real.py"
+
+
+class TestOneLineQuotedValue:
+    """Issue #60: a one-line invocation whose quoted --goal value contains
+    flag-like text (``python3 -m launch_gate``, ``--name``) must not be
+    mis-tokenized into a spurious ``--m`` flag or lose trailing flags."""
+
+    def test_long_quoted_goal_does_not_invent_m_flag(self):
+        line = (
+            "python3 /a/spokes/project-setup.py "
+            "--goal \"Mission: entrypoint python3 -m launch_gate that gates a "
+            "launch. exit codes 0=all-GO / 1=any-NO-GO / 2=usage-error, "
+            "pytest + ruff + mypy gate.\" "
+            "--name launch-gate --project-dir /home/sasha/AI/launch-gate/proj "
+            "--ai-dir /home/sasha/AI/launch-gate/ai --cycles 12 "
+            "--repo belarusian/launch-gate --seed /home/sasha/AI/launch-gate/seed"
+        )
+        result = extract_invocations(line)
+        assert len(result) == 1
+        flags = result[0].flag_names()
+        assert flags == [
+            "goal",
+            "name",
+            "project-dir",
+            "ai-dir",
+            "cycles",
+            "repo",
+            "seed",
+        ]
+        # No spurious "m" flag invented from the "-m" inside the quoted value.
+        assert "m" not in flags
+
+    def test_quoted_value_with_colons_and_slashes(self):
+        line = (
+            "python3 /a/spokes/b.py "
+            "--goal \"Mission: Build x: a CLI (entrypoint python3 -m x) that "
+            "gates a launch at the moment.\" --name x --project-dir /p --ai-dir /a"
+        )
+        result = extract_invocations(line)
+        assert len(result) == 1
+        assert result[0].flag_names() == ["goal", "name", "project-dir", "ai-dir"]
+        goal_value = dict(result[0].args)["--goal"]
+        assert "python3 -m x" in goal_value
+        assert goal_value.startswith("Mission: Build x:")
