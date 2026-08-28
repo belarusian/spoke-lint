@@ -33,6 +33,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from spoke_lint.contract import is_runner_prompt
 from spoke_lint.diff import diff_prompt_full
 from spoke_lint.report import findings_to_json, render_report
 
@@ -163,6 +164,15 @@ def _run_check(args: argparse.Namespace) -> int:
         text = prompt_path.read_text(encoding="utf-8")
     except OSError as exc:
         print(f"spoke-lint: error: cannot read prompt file {prompt_path}: {exc}", file=sys.stderr)
+        return 2
+
+    if not is_runner_prompt(text):
+        print(
+            f"spoke-lint: error: {prompt_path} is not a runner prompt "
+            "(pure shell / non-runner-prompt input); spoke-lint lints runner "
+            "prompts (markdown + bash blocks), not shell launch scripts.",
+            file=sys.stderr,
+        )
         return 2
 
     path = _split_path(args.path)

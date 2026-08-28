@@ -270,3 +270,47 @@ class TestRunJson:
             ]
         )
         assert out.strip() == expected
+
+
+class TestRunNotRunnerPrompt:
+    """Issue #60: a pure shell / non-runner-prompt input is rejected with exit 2
+    and a single diagnostic line, not a ``missing_tool`` flood."""
+
+    def test_shell_script_exit_2_single_diagnostic(self, tmp_path, capsys):
+        prompt = _write_prompt(
+            tmp_path,
+            "#!/bin/bash\nset -uo pipefail\nexport FIVE_MODEL=x\n"
+            "INNER=$(cat <<'EOF'\nhello\nEOF\n)\n",
+        )
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "not a runner prompt" in err
+        # Exactly one diagnostic line on stderr (no missing_tool flood).
+        assert err.strip().count("\n") == 0
+        # Nothing on stdout.
+        assert capsys.readouterr().out == ""
+
+    def test_launch_setup_fixture_exit_2(self, tmp_path, capsys):
+        fixture = FIXTURES / "launch_setup.sh"
+        code = run(["check", str(fixture), "--spokes-dir", str(FIXTURES)])
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "not a runner prompt" in err
+        assert "missing_tool" not in err
+
+    def test_runner_prompt_with_fenced_shell_still_lints(self, tmp_path, capsys):
+        # A runner prompt that embeds shell in a fenced block is still linted
+        # (not rejected); here it is clean -> exit 0.
+        fence = chr(96) * 3
+        prompt = _write_prompt(
+            tmp_path,
+            "Run the gate:\n" + fence + "\n"
+            + "set -uo pipefail\nexport FIVE_MODEL=x\n"
+            + fence + "\n"
+            + "Then run the spoke\n"
+            + "python3 /a/spokes/no_args.py\n",
+        )
+        code = run(["check", str(prompt), "--spokes-dir", str(FIXTURES)])
+        assert code == 0
+        assert capsys.readouterr().out.strip() == "OK"
